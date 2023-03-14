@@ -1,0 +1,1 @@
+# rybnicka-table-socker-league
