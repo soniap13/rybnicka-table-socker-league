@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QStackedWidget, QPushButton, QVBoxLayout
+from database import Database
 
 from double_league_menu import DoubleLeagueMenu
 from single_league_menu import SingleLeagueMenu
@@ -6,8 +7,8 @@ from widget import Widget
 
 
 class MainMenu(Widget):
-     def __init__(self, window: QStackedWidget):
-        super().__init__(window)
+     def __init__(self, window: QStackedWidget, database):
+        super().__init__(window, database)
         self._window = window
         self._layout = QVBoxLayout()
         single_league_button = QPushButton('Single League')
@@ -19,14 +20,14 @@ class MainMenu(Widget):
         self.setLayout(self._layout)
 
 class Window(QStackedWidget):
-    def __init__(self):
+    def __init__(self, database: Database):
         super().__init__()
         self.setWindowTitle("RTSL (Rybnicka Table Soccer League)'")
-        self._main_menu = MainMenu(self)
+        self._main_menu = MainMenu(self, database)
         self.addWidget(self._main_menu)
-        self._single_league_menu = SingleLeagueMenu(self)
+        self._single_league_menu = SingleLeagueMenu(self, database)
         self.addWidget(self._single_league_menu)
-        self._double_league_menu = DoubleLeagueMenu(self)
+        self._double_league_menu = DoubleLeagueMenu(self, database)
         self.addWidget(self._double_league_menu)
         self.setCurrentWidget(self._main_menu)
         self.show()
