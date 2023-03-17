@@ -1,13 +1,13 @@
 from PyQt5.QtWidgets import QApplication
 
-from database import Database
-from main_menu import Window
+from league_database import LeagueDatabase
+from application_window import ApplicationWindow
 
 
 if __name__ == '__main__':
     app = QApplication([])
     app.setStyle('Fusion')
-    database = Database()
-    window = Window(database)
+    database = LeagueDatabase()
+    window = ApplicationWindow(database)
     app.exec()
     database.close_connection()

@@ -1,36 +1,75 @@
-from PyQt5.QtWidgets import QWidget, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QLineEdit
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QWidget, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QLineEdit
 
-from widget import Widget
+from league_menu import LeagueMenu
 
 
-class SingleLeagueMenu(Widget):
+class SingleLeagueMenu(LeagueMenu):
     def __init__(self, window, database):
         super().__init__(window, database)
         self._layout = QVBoxLayout()
         self._layout.addWidget(QLabel("Single League"))
         self._add_return_button(self._window.switch_to_main_menu)
-        self._add_player_data_interaction()
+        self._players_statistics = self._add_statistics_table()
         self._add_new_match_interaction()
-        self._display_players_statistics()
+        self._recent_matches = self._add_recent_matches_table()
         self.setLayout(self._layout)
+        self.update()
+
+    def update(self):
+        self._update_player_statistcs()
+        self._update_recent_matches()
+        self._update_name_boxes()
+
+    def _add_statistics_table(self) -> QTableWidget:
+        self._layout.addWidget(QLabel("Statistics"))
+        players_statistics = QTableWidget()
+        self._layout.addWidget(players_statistics)
+        return players_statistics
 
     def _add_new_match_interaction(self) -> None:
         self._layout.addWidget(QLabel("Add new match"))
-        name1_box = QComboBox()
-        name1_box.addItems(self._database.get_player_names())
-        name2_box = QComboBox()
-        name2_box.addItems(self._database.get_player_names())
+        self._name1_box = QComboBox()
+        self._name2_box = QComboBox()
         score_box = QLineEdit()
-        self._layout.addWidget(name1_box)
-        self._layout.addWidget(name2_box)
+        self._layout.addWidget(self._name1_box)
+        self._layout.addWidget(self._name2_box)
         self._layout.addWidget(score_box)
         add_button = QPushButton('Add')
         add_button.clicked.connect(lambda: self._add_new_match_to_database(
-            name1_box.currentText(), name2_box.currentText(), int(score_box.text())))
+            self._name1_box.currentText(), self._name2_box.currentText(), int(score_box.text())))
         self._layout.addWidget(add_button)
+
+    def _update_name_boxes(self) -> None:
+        player_names = [''] + self._database.get_player_names()
+        for name_box in (self._name1_box, self._name2_box):
+            name_box.clear()
+            name_box.addItems(player_names)
+    
+    def _add_recent_matches_table(self) -> QTableWidget:
+        self._layout.addWidget(QLabel("Recent Matches"))
+        recent_matches = QTableWidget()
+        self._layout.addWidget(recent_matches)
+        return recent_matches
 
     def _add_new_match_to_database(self, win_player: str, loose_player: str, goal_balance: int) -> None:
         self._database.insert_single_league_match(win_player, loose_player, goal_balance)
-        print(self._database.get_single_league_matches())
-        self._database.update_player_points(win_player, self._database.get_player_points(win_player) + goal_balance)
-        self._database.update_player_points(loose_player, self._database.get_player_points(loose_player) - goal_balance)
+        self.update()
+    
+    def _update_player_statistcs(self) -> None:
+        players = self._database.get_players()
+        self._players_statistics.setColumnCount(2)
+        self._players_statistics.setRowCount(len(players))
+        self._players_statistics.setHorizontalHeaderLabels(('Name', 'Points'))
+        for index, player in enumerate(sorted(players, key=lambda player: player.sl_points, reverse=True)):
+            self._players_statistics.setItem(index, 0, QTableWidgetItem(player.name))
+            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(player.sl_points)))
+
+    def _update_recent_matches(self) -> None:
+        matches = self._database.get_single_league_matches(10)
+        self._recent_matches.setColumnCount(3)
+        self._recent_matches.setRowCount(len(matches))
+        self._recent_matches.setHorizontalHeaderLabels(('Win Player', 'Loose Player', 'Goal Balance'))
+        for index, match in enumerate(matches):
+            self._recent_matches.setItem(index, 0, QTableWidgetItem(match.win_player))
+            self._recent_matches.setItem(index, 1, QTableWidgetItem(match.loose_player))
+            self._recent_matches.setItem(index, 2, QTableWidgetItem(str(match.goal_balance)))
