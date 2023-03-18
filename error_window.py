@@ -1,7 +1,13 @@
-from pyQt4 import QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QPushButton, QLabel, QVBoxLayout, QWidget
 
 class ErrorWindow(QWidget):
-    def __init__(self):
+    def __init__(self, error_message: str):
+        super().__init__()
         self._layout = QVBoxLayout()
-        self._layout.addWidget(QLabel("Error"))
+        self._layout.addWidget(QLabel(error_message))
         self.setLayout(self._layout)
+        ok_button = QPushButton()
+        ok_button.setText('OK')
+        ok_button.clicked.connect(lambda: self.close())
+        self._layout.addWidget(ok_button)
+        self.show()

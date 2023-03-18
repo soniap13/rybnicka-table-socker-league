@@ -1,6 +1,10 @@
+from typing import Optional
+
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QWidget, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QLineEdit
 
+from error_window import ErrorWindow
 from league_menu import LeagueMenu
+from match import SingleLeagueMatch
 
 
 class SingleLeagueMenu(LeagueMenu):
@@ -30,14 +34,29 @@ class SingleLeagueMenu(LeagueMenu):
         self._layout.addWidget(QLabel("Add new match"))
         self._name1_box = QComboBox()
         self._name2_box = QComboBox()
-        score_box = QLineEdit()
+        self._score_box = QLineEdit()
         self._layout.addWidget(self._name1_box)
         self._layout.addWidget(self._name2_box)
-        self._layout.addWidget(score_box)
+        self._layout.addWidget(self._score_box)
         add_button = QPushButton('Add')
         add_button.clicked.connect(lambda: self._add_new_match_to_database(
-            self._name1_box.currentText(), self._name2_box.currentText(), int(score_box.text())))
+            self._get_validated_match()))
         self._layout.addWidget(add_button)
+
+    def _get_validated_match(self) -> Optional[SingleLeagueMatch]:
+        player_names = (self._name1_box.currentText(), self._name2_box.currentText())
+        if any([player_name == '' for player_name in player_names]):
+            self._error_window = ErrorWindow("Name of one of the players was left empty")
+            return None
+        if len(set(player_names)) != len(player_names):
+            self._error_window = ErrorWindow("Names of the players can't be repeated")
+            return None
+        goal_balance = self._score_box.text()
+        if goal_balance not in (str(i) for i in range(11)):
+            self._error_window = ErrorWindow("Goal balnce must be an integer between 0 and 10")
+            return None
+        self._score_box.clear()
+        return SingleLeagueMatch(*player_names, int(goal_balance))
 
     def _update_name_boxes(self) -> None:
         player_names = [''] + self._database.get_player_names()
@@ -51,10 +70,11 @@ class SingleLeagueMenu(LeagueMenu):
         self._layout.addWidget(recent_matches)
         return recent_matches
 
-    def _add_new_match_to_database(self, win_player: str, loose_player: str, goal_balance: int) -> None:
-        self._database.insert_single_league_match(win_player, loose_player, goal_balance)
-        self.update()
-    
+    def _add_new_match_to_database(self, match: Optional[SingleLeagueMatch]) -> None:
+        if match is not None:
+            self._database.insert_single_league_match(match)
+            self.update()
+
     def _update_player_statistcs(self) -> None:
         players = self._database.get_players()
         self._players_statistics.setColumnCount(2)
@@ -62,7 +82,7 @@ class SingleLeagueMenu(LeagueMenu):
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'Points'))
         for index, player in enumerate(sorted(players, key=lambda player: player.sl_points, reverse=True)):
             self._players_statistics.setItem(index, 0, QTableWidgetItem(player.name))
-            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(player.sl_points)))
+            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(self._database.get_sl_score(player.name))))
 
     def _update_recent_matches(self) -> None:
         matches = self._database.get_single_league_matches(10)

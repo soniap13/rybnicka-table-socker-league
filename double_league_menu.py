@@ -1,6 +1,10 @@
+from typing import Optional
+
 from PyQt5.QtWidgets import QTableWidget, QLabel, QTableWidgetItem, QWidget, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLineEdit
 
+from error_window import ErrorWindow
 from league_menu import LeagueMenu
+from match import DoubleLeagueMatch
 
 
 def calculate_moved_points(diff: float, bilans: int) -> float:
@@ -35,44 +39,55 @@ class DoubleLeagueMenu(LeagueMenu):
 
     def _add_new_match_interaction(self) -> None:
         self._layout.addWidget(QLabel("Add new match"))
-        self._name1_box = QComboBox()
-        self._name2_box = QComboBox()
-        self._name3_box = QComboBox()
-        self._name4_box = QComboBox()
-        score_box = QLineEdit()
-        self._layout.addWidget(self._name1_box)
-        self._layout.addWidget(self._name2_box)
-        self._layout.addWidget(self._name3_box)
-        self._layout.addWidget(self._name4_box)
-        self._layout.addWidget(score_box)
+        self._name_boxes = [QComboBox() for _ in range(4)]
+        self._score_box = QLineEdit()
+        for name_box in self._name_boxes:
+            self._layout.addWidget(name_box)
+        self._layout.addWidget(self._score_box)
         add_button = QPushButton('Add')
         add_button.clicked.connect(lambda: self._add_new_match_to_database(
-            self._name1_box.currentText(), self._name2_box.currentText(),
-            self._name3_box.currentText(), self._name4_box.currentText(), int(score_box.text())))
+            self._get_validated_match()))
         self._layout.addWidget(add_button)
+
+    def _get_validated_match(self) -> Optional[DoubleLeagueMatch]:
+        player_names = [name_box.currentText() for name_box in self._name_boxes]
+        if any([player_name == '' for player_name in player_names]):
+            self._error_window = ErrorWindow("Name of one of the players was left empty")
+            return None
+        if len(set(player_names)) != len(player_names):
+            self._error_window = ErrorWindow("Names of the players can't be repeated")
+            return None
+        goal_balance = self._score_box.text()
+        if goal_balance not in (str(i) for i in range(11)):
+            self._error_window = ErrorWindow("Goal balnce must be an integer between 0 and 10")
+            return None
+        self._score_box.clear()
+        return DoubleLeagueMatch(*player_names, int(goal_balance))
 
     def _update_name_boxes(self):
         palyer_names = [''] + self._database.get_player_names()
-        for name_box in (self._name1_box, self._name2_box, self._name3_box, self._name4_box):
+        for name_box in self._name_boxes:
             name_box.clear()
             name_box.addItems(palyer_names)
 
-    def _add_new_match_to_database(self, win_player1: str, win_player2: str, loose_player1: str, loose_player2: str, goal_balance: int) -> None:
-        self._database.insert_double_league_match(win_player1, win_player2, loose_player1, loose_player1, goal_balance)
-        win_player1_points = self._database.get_player_dl_points(win_player1)
-        win_player2_points = self._database.get_player_dl_points(win_player2)
-        loose_player1_points = self._database.get_player_dl_points(loose_player1)
-        loose_player2_points = self._database.get_player_dl_points(loose_player2)
+    def _add_new_match_to_database(self, match: Optional[DoubleLeagueMatch]) -> None:
+        if match is None:
+            return
+        self._database.insert_double_league_match(match)
+        win_player1_points = self._database.get_player_dl_points(match.win_player1)
+        win_player2_points = self._database.get_player_dl_points(match.win_player2)
+        loose_player1_points = self._database.get_player_dl_points(match.loose_player1)
+        loose_player2_points = self._database.get_player_dl_points(match.loose_player2)
         win_player2_ratio=calculate_ratio(win_player1_points, win_player2_points)
         win_player1_ratio=1-win_player2_ratio
         loose_player1_ratio=calculate_ratio(loose_player1_points, loose_player2_points)
         loose_player2_ratio=1-loose_player1_ratio
         diff=calculate_diff(win_player1_points, win_player2_points, loose_player1_points, loose_player2_points)
-        points_to_add=calculate_moved_points(diff, goal_balance)
-        self._database.update_player_dl_points(win_player1, win_player1_points + win_player1_ratio * points_to_add)
-        self._database.update_player_dl_points(win_player2, win_player2_points + win_player2_ratio * points_to_add)
-        self._database.update_player_dl_points(loose_player1, loose_player1_points - loose_player1_ratio * points_to_add)
-        self._database.update_player_dl_points(loose_player2, loose_player2_points - loose_player2_ratio * points_to_add)
+        points_to_add=calculate_moved_points(diff, match.goal_balance)
+        self._database.update_player_dl_points(match.win_player1, win_player1_points + win_player1_ratio * points_to_add)
+        self._database.update_player_dl_points(match.win_player2, win_player2_points + win_player2_ratio * points_to_add)
+        self._database.update_player_dl_points(match.loose_player1, loose_player1_points - loose_player1_ratio * points_to_add)
+        self._database.update_player_dl_points(match.loose_player2, loose_player2_points - loose_player2_ratio * points_to_add)
         self.update()
 
     def _add_recent_matches_table(self) -> QTableWidget:
@@ -94,7 +109,7 @@ class DoubleLeagueMenu(LeagueMenu):
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'Points'))
         for index, player in enumerate(sorted(players, key=lambda player: player.dl_points, reverse=True)):
             self._players_statistics.setItem(index, 0, QTableWidgetItem(player.name))
-            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(player.dl_points)))
+            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(round(player.dl_points))))
 
     def _update_recent_matches(self) -> None:
         matches = self._database.get_double_league_matches(10)
