@@ -1,10 +1,18 @@
+from dataclasses import dataclass
 from typing import Optional
 
-from PyQt5.QtWidgets import QWidget, QCheckBox, QTableWidget, QTableWidgetItem, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QLineEdit
+from PyQt5.QtWidgets import (
+    QCheckBox, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from error_window import ErrorWindow
 from league_database import LeagueDatabase
-from player import Player
+
+
+@dataclass
+class PlayerStartingData:
+    name: str
+    dl_points: float
+    try_hard_factor: float
 
 
 class MainMenu(QWidget):
@@ -19,6 +27,9 @@ class MainMenu(QWidget):
         self._add_players_statistics_table()
         self.setLayout(self._layout)
     
+    def update(self) -> None:
+        self._update_player_statistics()
+
     def _add_single_league_button(self) -> None:
         single_league_button = QPushButton('Single League')
         single_league_button.clicked.connect(self._window.switch_to_single_league_menu)
@@ -45,7 +56,7 @@ class MainMenu(QWidget):
             lambda: self._add_new_player_to_database(self._get_validated_player()))
         self._layout.addWidget(add_button)
     
-    def _get_validated_player(self) -> Optional[Player]:
+    def _get_validated_player(self) -> Optional[PlayerStartingData]:
         player_name = self._name_box.text()
         starting_points = self._starting_points_box.text()
         if player_name == '':
@@ -57,26 +68,28 @@ class MainMenu(QWidget):
         self._name_box.clear()
         self._starting_points_box.clear()
         self._try_hard_check_box.setChecked(False)
-        return Player(player_name, 0, float(starting_points), 1 if bool(self._try_hard_check_box.isChecked()) else 0)
+        return PlayerStartingData(
+            player_name, float(starting_points), 1 if bool(self._try_hard_check_box.isChecked()) else 0)
 
     def _add_players_statistics_table(self) -> None:
         self._layout.addWidget(QLabel("Statisctics"))
         self._players_statistics = QTableWidget()
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'SL Points', 'DL Points'))
-        self._update_player_statistics()
         self._layout.addWidget(self._players_statistics)
 
     def _update_player_statistics(self) -> None:
-        players = self._database.get_players()
+        players = self._database.get_player_names()
         self._players_statistics.setColumnCount(3)
         self._players_statistics.setRowCount(len(players))
         self._players_statistics.setHorizontalHeaderLabels(("Player", "SL score", "DL core"))
         for index, player in enumerate(players):
-            self._players_statistics.setItem(index, 0, QTableWidgetItem(player.name))
-            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(round(player.sl_points))))
-            self._players_statistics.setItem(index, 2, QTableWidgetItem(str(round(player.dl_points))))
+            self._players_statistics.setItem(index, 0, QTableWidgetItem(player))
+            self._players_statistics.setItem(index, 1, QTableWidgetItem(
+                str(self._database.get_player_sl_points(player))))
+            self._players_statistics.setItem(index, 2, QTableWidgetItem(
+                str(self._database.get_player_dl_points(player))))
 
-    def _add_new_player_to_database(self, player: Optional[Player]) -> None:
+    def _add_new_player_to_database(self, player: Optional[PlayerStartingData]) -> None:
         if player is not None:
             if player.name in self._database.get_player_names():
                 self._error_window(f"Player {player.name} already exists in database")

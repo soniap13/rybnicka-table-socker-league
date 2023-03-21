@@ -1,4 +1,5 @@
-from PyQt5.QtWidgets import QPushButton, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+
 
 class ErrorWindow(QWidget):
     def __init__(self, error_message: str):

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QWidget, QStackedWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QLineEdit
+from PyQt5.QtWidgets import QComboBox, QLabel, QLineEdit, QVBoxLayout, QPushButton, QTableWidgetItem
 
 from error_window import ErrorWindow
 from league_menu import LeagueMenu
@@ -17,18 +17,11 @@ class SingleLeagueMenu(LeagueMenu):
         self._add_new_match_interaction()
         self._recent_matches = self._add_recent_matches_table()
         self.setLayout(self._layout)
-        self.update()
 
-    def update(self):
+    def update(self) -> None:
         self._update_player_statistcs()
         self._update_recent_matches()
         self._update_name_boxes()
-
-    def _add_statistics_table(self) -> QTableWidget:
-        self._layout.addWidget(QLabel("Statistics"))
-        players_statistics = QTableWidget()
-        self._layout.addWidget(players_statistics)
-        return players_statistics
 
     def _add_new_match_interaction(self) -> None:
         self._layout.addWidget(QLabel("Add new match"))
@@ -63,12 +56,6 @@ class SingleLeagueMenu(LeagueMenu):
         for name_box in (self._name1_box, self._name2_box):
             name_box.clear()
             name_box.addItems(player_names)
-    
-    def _add_recent_matches_table(self) -> QTableWidget:
-        self._layout.addWidget(QLabel("Recent Matches"))
-        recent_matches = QTableWidget()
-        self._layout.addWidget(recent_matches)
-        return recent_matches
 
     def _add_new_match_to_database(self, match: Optional[SingleLeagueMatch]) -> None:
         if match is not None:
@@ -76,20 +63,23 @@ class SingleLeagueMenu(LeagueMenu):
             self.update()
 
     def _update_player_statistcs(self) -> None:
-        players = self._database.get_players()
+        players = self._database.get_player_names()
         self._players_statistics.setColumnCount(2)
         self._players_statistics.setRowCount(len(players))
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'Points'))
-        for index, player in enumerate(sorted(players, key=lambda player: player.sl_points, reverse=True)):
-            self._players_statistics.setItem(index, 0, QTableWidgetItem(player.name))
-            self._players_statistics.setItem(index, 1, QTableWidgetItem(str(self._database.get_sl_score(player.name))))
+        for index, player in enumerate(
+                sorted(players, key=lambda player: self._database.get_player_sl_points(player),
+                       reverse=True)):
+            self._players_statistics.setItem(index, 0, QTableWidgetItem(player))
+            self._players_statistics.setItem(index, 1, QTableWidgetItem(
+                str(self._database.get_player_sl_points(player))))
 
     def _update_recent_matches(self) -> None:
         matches = self._database.get_single_league_matches(10)
         self._recent_matches.setColumnCount(3)
         self._recent_matches.setRowCount(len(matches))
-        self._recent_matches.setHorizontalHeaderLabels(('Win Player', 'Loose Player', 'Goal Balance'))
+        self._recent_matches.setHorizontalHeaderLabels(('Winning Player', 'Loser Player', 'Goal Balance'))
         for index, match in enumerate(matches):
-            self._recent_matches.setItem(index, 0, QTableWidgetItem(match.win_player))
-            self._recent_matches.setItem(index, 1, QTableWidgetItem(match.loose_player))
+            self._recent_matches.setItem(index, 0, QTableWidgetItem(match.winning_player))
+            self._recent_matches.setItem(index, 1, QTableWidgetItem(match.loser_player))
             self._recent_matches.setItem(index, 2, QTableWidgetItem(str(match.goal_balance)))
