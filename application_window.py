@@ -19,7 +19,7 @@ class ApplicationWindow(QStackedWidget):
         self.addWidget(self._double_league_menu)
         self._player_data_view = PlayerDataView(self, database)
         self.addWidget(self._player_data_view)
-        self.setCurrentWidget(self._main_menu)
+        self.switch_to_main_menu()
         self.show()
 
     def switch_to_single_league_menu(self) -> None:

@@ -37,11 +37,52 @@ class LeagueDatabase:
             goal_balance INTEGER
             )""")
 
-    def insert_player(self, player) -> None:
+    def is_player_in_database(self, player: str) -> bool:
+        self._cursor.execute("SELECT * FROM players WHERE name = :player",
+                             {"player": player})
+        return self._cursor.fetchone() is not None
+
+    def insert_player(self, player: str) -> None:
         with self._conn:
              self._cursor.execute(
                  "INSERT INTO players VALUES (:name, :dl_points, :try_hard_factor)",
                  {'name': player.name, 'dl_points': player.dl_points, 'try_hard_factor': player.try_hard_factor})
+
+    def update_player_name(self, old_name: str, new_name: str) -> None:
+        with self._conn:
+            self._cursor.execute(
+                "UPDATE players SET name = :new_name WHERE name = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE single_league_matches SET winning_player = :new_name WHERE winning_player = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE single_league_matches SET loser_player = :new_name WHERE loser_player = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE double_league_matches SET winning_player1 = :new_name WHERE winning_player1 = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE double_league_matches SET winning_player2 = :new_name WHERE winning_player2 = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE double_league_matches SET loser_player1 = :new_name WHERE loser_player1 = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+            self._cursor.execute(
+                "UPDATE double_league_matches SET loser_player2 = :new_name WHERE loser_player2 = :old_name",
+                {"old_name": old_name, "new_name": new_name}
+            )
+
+    def update_player_try_hard_factor(self, player: str, new_try_hard_factor: float) -> None:
+        with self._conn:
+            self._cursor.execute("UPDATE players SET try_hard_factor = :new_try_hard_factor WHERE name = :player",
+                                 {"new_try_hard_factor": new_try_hard_factor, "player": player})
 
     def get_player_names(self) -> List[str]:
         self._cursor.execute("SELECT name FROM players")
@@ -59,6 +100,18 @@ class LeagueDatabase:
         self._cursor.execute("SELECT * FROM single_league_matches ORDER BY sl_id DESC")
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [SingleLeagueMatch(*record[1:]) for record in records]
+
+    def get_player_single_league_matches(self, player: str,
+                                  num: Optional[int] = None) -> List[SingleLeagueMatch]:
+        self._cursor.execute(
+            """
+            SELECT * FROM single_league_matches
+            WHERE winning_player = :player OR loser_player = :player
+            ORDER BY sl_id DESC
+            """,
+            {"player": player})
+        records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
+        return [SingleLeagueMatch(*record[1:]) for record in records]
     
     def insert_double_league_match(self, match: DoubleLeagueMatch) -> None:
         with self._conn:
@@ -71,6 +124,19 @@ class LeagueDatabase:
 
     def get_double_league_matches(self, num: Optional[int] = None) -> List[DoubleLeagueMatch]:
         self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
+        records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
+        return [DoubleLeagueMatch(*record[1:]) for record in records]
+
+    def get_player_double_league_matches(self, player: str,
+                                         num: Optional[int] = None) -> List[DoubleLeagueMatch]:
+        self._cursor.execute(
+            """
+            SELECT * FROM double_league_matches
+            WHERE (winning_player1 = :player OR winning_player2 = :player
+                   OR loser_player1 = :player OR loser_player2 = :player)
+            ORDER BY dl_id DESC
+            """,
+            {"player": player})
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [DoubleLeagueMatch(*record[1:]) for record in records]
 

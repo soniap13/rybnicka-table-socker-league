@@ -1,11 +1,15 @@
+from copy import copy
 from dataclasses import dataclass
 from typing import Optional
+from functools import partial
 
 from PyQt5.QtWidgets import (
-    QCheckBox, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+    QCheckBox, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget)
 
 from error_window import ErrorWindow
 from league_database import LeagueDatabase
+from utils import is_float
 
 
 @dataclass
@@ -62,14 +66,14 @@ class MainMenu(QWidget):
         if player_name == '':
             self._error_window = ErrorWindow("Name od the player must be specified")
             return None
-        if not starting_points.isnumeric():
+        if not is_float(starting_points):
             self._error_window = ErrorWindow("Starting points for double league must be specified")
             return None
         self._name_box.clear()
         self._starting_points_box.clear()
+        try_hard_factor = 1 if bool(self._try_hard_check_box.isChecked()) else 0
         self._try_hard_check_box.setChecked(False)
-        return PlayerStartingData(
-            player_name, float(starting_points), 1 if bool(self._try_hard_check_box.isChecked()) else 0)
+        return PlayerStartingData(player_name, float(starting_points), try_hard_factor)
 
     def _add_players_statistics_table(self) -> None:
         self._layout.addWidget(QLabel("Statisctics"))
@@ -81,9 +85,12 @@ class MainMenu(QWidget):
         players = self._database.get_player_names()
         self._players_statistics.setColumnCount(3)
         self._players_statistics.setRowCount(len(players))
+        #self._players_statistics.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._players_statistics.setHorizontalHeaderLabels(("Player", "SL score", "DL core"))
         for index, player in enumerate(players):
-            self._players_statistics.setItem(index, 0, QTableWidgetItem(player))
+            self._players_statistics.setCellWidget(index, 0, QPushButton(player))
+            self._players_statistics.cellWidget(index, 0).clicked.connect(
+                partial(self._window.switch_to_player_data_view, player))
             self._players_statistics.setItem(index, 1, QTableWidgetItem(
                 str(self._database.get_player_sl_points(player))))
             self._players_statistics.setItem(index, 2, QTableWidgetItem(
