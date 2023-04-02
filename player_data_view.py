@@ -1,10 +1,11 @@
 from typing import Callable, Optional
 
-from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QLineEdit, QPushButton, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
+from constants import NORMAL_TEXT_FONT, SECTION_TITLE_FONT, TITLE_FONT
 from error_window import ErrorWindow
 from league_database import LeagueDatabase
-from utils import is_float
+from utils import create_label, is_float
 
 
 class PlayerDataView(QWidget):
@@ -14,7 +15,7 @@ class PlayerDataView(QWidget):
         self._database = database
         self._name = None
         self._layout = QVBoxLayout()
-        self._layout.addWidget(QLabel("Player Info"))
+        self._layout.addWidget(create_label("Player Info", TITLE_FONT))
         self._add_return_button(self._window.switch_to_main_menu)
         self._players_statistics = self._add_statistics()
         self._recent_sl_matches = self._add_recent_sl_matches_table()
@@ -34,16 +35,16 @@ class PlayerDataView(QWidget):
         self._layout.addWidget(return_button)
     
     def _add_statistics(self):
-        name_label = QLabel("Name: ")
+        name_label = create_label("Name: ", NORMAL_TEXT_FONT)
         self._name_text_box = QLineEdit()
         update_name_button = QPushButton("Update Name")
         update_name_button.clicked.connect(self._update_name_of_player)
-        try_hard_factor_label = QLabel("Try Hard Factor:")
+        try_hard_factor_label = create_label("Try Hard Factor:", NORMAL_TEXT_FONT)
         self._try_hard_factor_box = QLineEdit()
         update_try_hard_factor_button = QPushButton("Update Try Hard Factor")
         update_try_hard_factor_button.clicked.connect(self._update_player_try_hard_factor)
-        self._sl_points_label = QLabel()
-        dl_points_label = QLabel("DL points:")
+        self._sl_points_label = create_label("", NORMAL_TEXT_FONT)
+        dl_points_label = create_label("DL points:", NORMAL_TEXT_FONT)
         self._dl_points_box = QLineEdit()
         update_dl_points_button = QPushButton("Update DL Points")
         update_dl_points_button.clicked.connect(self._update_player_dl_points)
@@ -75,13 +76,13 @@ class PlayerDataView(QWidget):
         self.update()
 
     def _add_recent_sl_matches_table(self) -> QTableWidget:
-        self._layout.addWidget(QLabel("Recent Single League Matches"))
+        self._layout.addWidget(create_label("Recent Single League Matches", SECTION_TITLE_FONT))
         recent_matches = QTableWidget()
         self._layout.addWidget(recent_matches)
         return recent_matches
 
     def _add_recent_dl_matches_table(self) -> QTableWidget:
-        self._layout.addWidget(QLabel("Recent Double League Matches"))
+        self._layout.addWidget(create_label("Recent Double League Matches", SECTION_TITLE_FONT))
         recent_matches = QTableWidget()
         self._layout.addWidget(recent_matches)
         return recent_matches

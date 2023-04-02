@@ -4,12 +4,13 @@ from typing import Optional
 from functools import partial
 
 from PyQt5.QtWidgets import (
-    QCheckBox, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
+    QCheckBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget)
 
+from constants import SECTION_TITLE_FONT
 from error_window import ErrorWindow
 from league_database import LeagueDatabase
-from utils import is_float
+from utils import create_label, is_float
 
 
 @dataclass
@@ -45,11 +46,11 @@ class MainMenu(QWidget):
         self._layout.addWidget(double_league_button)
 
     def _add_player_data_interaction(self) -> None:
-        self._layout.addWidget(QLabel("Add new player"))
-        self._layout.addWidget(QLabel("Name:"))
+        self._layout.addWidget(create_label("Add new player", SECTION_TITLE_FONT))
+        self._layout.addWidget(create_label("Name:"))
         self._name_box = QLineEdit()
         self._layout.addWidget(self._name_box)
-        self._layout.addWidget(QLabel("Starting points for Double League:"))
+        self._layout.addWidget(create_label("Starting points for Double League:"))
         self._starting_points_box = QLineEdit()
         self._layout.addWidget(self._starting_points_box)
         self._try_hard_check_box = QCheckBox()
@@ -76,7 +77,7 @@ class MainMenu(QWidget):
         return PlayerStartingData(player_name, float(starting_points), try_hard_factor)
 
     def _add_players_statistics_table(self) -> None:
-        self._layout.addWidget(QLabel("Statisctics"))
+        self._layout.addWidget(create_label("Statisctics", SECTION_TITLE_FONT))
         self._players_statistics = QTableWidget()
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'SL Points', 'DL Points'))
         self._layout.addWidget(self._players_statistics)
