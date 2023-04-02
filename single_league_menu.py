@@ -1,17 +1,20 @@
+from functools import partial
 from typing import Optional
 
-from PyQt5.QtWidgets import QComboBox, QLabel, QLineEdit, QVBoxLayout, QPushButton, QTableWidgetItem
+from PyQt5.QtWidgets import QComboBox, QLineEdit, QVBoxLayout, QPushButton, QTableWidgetItem
 
+from constants import POSSIBLE_GOAL_BALANCES, SECTION_TITLE_FONT, TITLE_FONT
 from error_window import ErrorWindow
 from league_menu import LeagueMenu
 from match import SingleLeagueMatch
+from utils import create_label
 
 
 class SingleLeagueMenu(LeagueMenu):
     def __init__(self, window, database):
         super().__init__(window, database)
         self._layout = QVBoxLayout()
-        self._layout.addWidget(QLabel("Single League"))
+        self._layout.addWidget(create_label("Single League", TITLE_FONT))
         self._add_return_button(self._window.switch_to_main_menu)
         self._players_statistics = self._add_statistics_table()
         self._add_new_match_interaction()
@@ -24,7 +27,7 @@ class SingleLeagueMenu(LeagueMenu):
         self._update_name_boxes()
 
     def _add_new_match_interaction(self) -> None:
-        self._layout.addWidget(QLabel("Add new match"))
+        self._layout.addWidget(create_label("Add new match", SECTION_TITLE_FONT))
         self._name1_box = QComboBox()
         self._name2_box = QComboBox()
         self._score_box = QLineEdit()
@@ -45,11 +48,11 @@ class SingleLeagueMenu(LeagueMenu):
             self._error_window = ErrorWindow("Names of the players can't be repeated")
             return None
         goal_balance = self._score_box.text()
-        if goal_balance not in (str(i) for i in range(11)):
+        if goal_balance not in POSSIBLE_GOAL_BALANCES:
             self._error_window = ErrorWindow("Goal balnce must be an integer between 0 and 10")
             return None
         self._score_box.clear()
-        return SingleLeagueMatch(*player_names, int(goal_balance))
+        return SingleLeagueMatch(None, *player_names, int(goal_balance))
 
     def _update_name_boxes(self) -> None:
         player_names = [''] + self._database.get_player_names()
@@ -76,10 +79,17 @@ class SingleLeagueMenu(LeagueMenu):
 
     def _update_recent_matches(self) -> None:
         matches = self._database.get_single_league_matches(10)
-        self._recent_matches.setColumnCount(3)
+        self._recent_matches.setColumnCount(4)
         self._recent_matches.setRowCount(len(matches))
-        self._recent_matches.setHorizontalHeaderLabels(('Winning Player', 'Loser Player', 'Goal Balance'))
+        self._recent_matches.setHorizontalHeaderLabels(('Winning Player', 'Loser Player', 'Goal Balance', ''))
         for index, match in enumerate(matches):
             self._recent_matches.setItem(index, 0, QTableWidgetItem(match.winning_player))
             self._recent_matches.setItem(index, 1, QTableWidgetItem(match.loser_player))
             self._recent_matches.setItem(index, 2, QTableWidgetItem(str(match.goal_balance)))
+            self._recent_matches.setCellWidget(index, 3, QPushButton("Delete"))
+            self._recent_matches.cellWidget(index, 3).clicked.connect(
+                partial(self._delete_match, match.id))
+    
+    def _delete_match(self, match_id: int) -> None:
+        self._database.delete_sl_match(match_id)
+        self.update()

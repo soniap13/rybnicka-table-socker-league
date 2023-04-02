@@ -99,7 +99,7 @@ class LeagueDatabase:
     def get_single_league_matches(self, num: Optional[int] = None) -> List[SingleLeagueMatch]:
         self._cursor.execute("SELECT * FROM single_league_matches ORDER BY sl_id DESC")
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
-        return [SingleLeagueMatch(*record[1:]) for record in records]
+        return [SingleLeagueMatch(*record) for record in records]
 
     def get_player_single_league_matches(self, player: str,
                                   num: Optional[int] = None) -> List[SingleLeagueMatch]:
@@ -111,7 +111,7 @@ class LeagueDatabase:
             """,
             {"player": player})
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
-        return [SingleLeagueMatch(*record[1:]) for record in records]
+        return [SingleLeagueMatch(*record) for record in records]
     
     def insert_double_league_match(self, match: DoubleLeagueMatch) -> None:
         with self._conn:
@@ -125,7 +125,7 @@ class LeagueDatabase:
     def get_double_league_matches(self, num: Optional[int] = None) -> List[DoubleLeagueMatch]:
         self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
-        return [DoubleLeagueMatch(*record[1:]) for record in records]
+        return [DoubleLeagueMatch(*record) for record in records]
 
     def get_player_double_league_matches(self, player: str,
                                          num: Optional[int] = None) -> List[DoubleLeagueMatch]:
@@ -138,7 +138,7 @@ class LeagueDatabase:
             """,
             {"player": player})
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
-        return [DoubleLeagueMatch(*record[1:]) for record in records]
+        return [DoubleLeagueMatch(*record) for record in records]
 
     def update_player_dl_points(self, name, new_points: float) -> None:
         with self._conn:
@@ -208,3 +208,13 @@ class LeagueDatabase:
         self._cursor.execute(
             "SELECT try_hard_factor FROM players WHERE name = :name", {"name": name})
         return self._cursor.fetchone()[0]
+
+    def delete_dl_match(self, match_id: int) -> None:
+        with self._conn:
+            self._cursor.execute("DELETE FROM double_league_matches WHERE dl_id = :dl_id",
+                                 {"dl_id": match_id})
+
+    def delete_sl_match(self, match_id: int) -> None:
+        with self._conn:
+            self._cursor.execute("DELETE FROM single_league_matches WHERE sl_id = :sl_id",
+                                 {"sl_id": match_id})
