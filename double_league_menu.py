@@ -10,19 +10,6 @@ from match import DoubleLeagueMatch
 from utils import create_label
 
 
-def calculate_moved_points(diff: float, bilans: int) -> float:
-    return pow((diff / 2720 + 1.7), 7.25) * (bilans / 10 + 0.5)
-
-
-def calculate_ratio(player1_points: float, player2_points: float) -> float:
-    return player1_points / (player1_points + player2_points)
-
-
-def calculate_diff(winning_player1_points: float, winning_player2_points: float,
-                   loser_player1_points: float, loser_player2_points: float) -> float:
-    return loser_player1_points + loser_player2_points - winning_player1_points - winning_player2_points
-
-
 class DoubleLeagueMenu(LeagueMenu):
     def __init__(self, window, database):
         super().__init__(window, database)
@@ -76,20 +63,6 @@ class DoubleLeagueMenu(LeagueMenu):
         if match is None:
             return
         self._database.insert_double_league_match(match)
-        winning_player1_points = self._database.get_player_dl_points(match.winning_player1)
-        winning_player2_points = self._database.get_player_dl_points(match.winning_player2)
-        loser_player1_points = self._database.get_player_dl_points(match.loser_player1)
-        loser_player2_points = self._database.get_player_dl_points(match.loser_player2)
-        winning_player2_ratio=calculate_ratio(winning_player1_points, winning_player2_points)
-        winning_player1_ratio=1-winning_player2_ratio
-        loser_player1_ratio=calculate_ratio(loser_player1_points, loser_player2_points)
-        loser_player2_ratio=1-loser_player1_ratio
-        diff=calculate_diff(winning_player1_points, winning_player2_points, loser_player1_points, loser_player2_points)
-        points_to_add=calculate_moved_points(diff, match.goal_balance)
-        self._database.update_player_dl_points(match.winning_player1, winning_player1_points + winning_player1_ratio * points_to_add)
-        self._database.update_player_dl_points(match.winning_player2, winning_player2_points + winning_player2_ratio * points_to_add)
-        self._database.update_player_dl_points(match.loser_player1, loser_player1_points - loser_player1_ratio * points_to_add)
-        self._database.update_player_dl_points(match.loser_player2, loser_player2_points - loser_player2_ratio * points_to_add)
         self.update()
 
     def _update_player_statistcs(self) -> None:

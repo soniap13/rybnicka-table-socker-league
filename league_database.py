@@ -1,13 +1,33 @@
+from enum import Enum
 import sqlite3
 from typing import List, Optional
 
 from match import DoubleLeagueMatch, SingleLeagueMatch
 
 
+def calculate_moved_points(diff: float, bilans: int) -> float:
+    return pow((diff / 2720 + 1.7), 7.25) * (bilans / 10 + 0.5)
+
+
+def calculate_ratio(player1_points: float, player2_points: float) -> float:
+    return player1_points / (player1_points + player2_points)
+
+
+def calculate_diff(winning_player1_points: float, winning_player2_points: float,
+                   loser_player1_points: float, loser_player2_points: float) -> float:
+    return loser_player1_points + loser_player2_points - winning_player1_points - winning_player2_points
+
+
+class Order(Enum):
+    asc = 'ASC'
+    desc = 'DESC'
+
+
 class LeagueDatabase:
     def __init__(self):
         self._conn = sqlite3.connect('database.db')
         self._cursor = self._conn.cursor()
+        self._calculate_dl_points()
         #self.initialize_db()
 
     def close_connection(self) -> None:
@@ -47,6 +67,7 @@ class LeagueDatabase:
              self._cursor.execute(
                  "INSERT INTO players VALUES (:name, :dl_points, :try_hard_factor)",
                  {'name': player.name, 'dl_points': player.dl_points, 'try_hard_factor': player.try_hard_factor})
+        self._player_to_dl_points[player.name] = player.dl_points
 
     def update_player_name(self, old_name: str, new_name: str) -> None:
         with self._conn:
@@ -78,6 +99,8 @@ class LeagueDatabase:
                 "UPDATE double_league_matches SET loser_player2 = :new_name WHERE loser_player2 = :old_name",
                 {"old_name": old_name, "new_name": new_name}
             )
+        self._player_to_dl_points[new_name] = self._player_to_dl_points[old_name]
+        del self._player_to_dl_points[old_name]
 
     def update_player_try_hard_factor(self, player: str, new_try_hard_factor: float) -> None:
         with self._conn:
@@ -102,7 +125,7 @@ class LeagueDatabase:
         return [SingleLeagueMatch(*record) for record in records]
 
     def get_player_single_league_matches(self, player: str,
-                                  num: Optional[int] = None) -> List[SingleLeagueMatch]:
+                                         num: Optional[int] = None) -> List[SingleLeagueMatch]:
         self._cursor.execute(
             """
             SELECT * FROM single_league_matches
@@ -121,9 +144,13 @@ class LeagueDatabase:
                 {'winning_player1': match.winning_player1, 'winning_player2': match.winning_player2,
                  'loser_player1': match.loser_player1, 'loser_player2': match.loser_player2,
                  'goal_balance': match.goal_balance})
+        self._update_dl_points_after_match(match)
 
-    def get_double_league_matches(self, num: Optional[int] = None) -> List[DoubleLeagueMatch]:
-        self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
+    def get_double_league_matches(self, num: Optional[int] = None, order: Order = Order.desc) -> List[DoubleLeagueMatch]:
+        if order == Order.desc:
+            self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
+        else:
+            self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id ASC")
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [DoubleLeagueMatch(*record) for record in records]
 
@@ -140,12 +167,13 @@ class LeagueDatabase:
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [DoubleLeagueMatch(*record) for record in records]
 
-    def update_player_dl_points(self, name, new_points: float) -> None:
+    def update_player_starting_dl_points(self, name, new_points: float) -> None:
         with self._conn:
             self._cursor.execute("UPDATE players SET dl_points = :dl_points WHERE name = :name",
                                  {'dl_points': new_points, 'name': name})
+        self._calculate_dl_points()
 
-    def get_player_dl_points(self, name: str) -> float:
+    def get_player_starting_dl_points(self, name: str) -> float:
         self._cursor.execute("SELECT dl_points FROM players WHERE name = :name",
                              {'name': name})
         return round(float(self._cursor.fetchone()[0]), 2)
@@ -213,8 +241,37 @@ class LeagueDatabase:
         with self._conn:
             self._cursor.execute("DELETE FROM double_league_matches WHERE dl_id = :dl_id",
                                  {"dl_id": match_id})
+        self._calculate_dl_points()
 
     def delete_sl_match(self, match_id: int) -> None:
         with self._conn:
             self._cursor.execute("DELETE FROM single_league_matches WHERE sl_id = :sl_id",
                                  {"sl_id": match_id})
+
+    def get_player_dl_points(self, player: str) -> float:
+        return round(self._player_to_dl_points[player], 2)
+            
+    def _update_player_dl_points(self, name: str, new_points: float) -> None:
+        self._player_to_dl_points[name] = new_points
+
+    def _update_dl_points_after_match(self, match: DoubleLeagueMatch) -> None:
+        winning_player1_points = self.get_player_dl_points(match.winning_player1)
+        winning_player2_points = self.get_player_dl_points(match.winning_player2)
+        loser_player1_points = self.get_player_dl_points(match.loser_player1)
+        loser_player2_points = self.get_player_dl_points(match.loser_player2)
+        winning_player2_ratio = calculate_ratio(winning_player1_points, winning_player2_points)
+        winning_player1_ratio = 1 - winning_player2_ratio
+        loser_player1_ratio = calculate_ratio(loser_player1_points, loser_player2_points)
+        loser_player2_ratio = 1 - loser_player1_ratio
+        diff = calculate_diff(winning_player1_points, winning_player2_points, loser_player1_points, loser_player2_points)
+        points_to_add = calculate_moved_points(diff, match.goal_balance)
+        self._update_player_dl_points(match.winning_player1, winning_player1_points + winning_player1_ratio * points_to_add)
+        self._update_player_dl_points(match.winning_player2, winning_player2_points + winning_player2_ratio * points_to_add)
+        self._update_player_dl_points(match.loser_player1, loser_player1_points - loser_player1_ratio * points_to_add)
+        self._update_player_dl_points(match.loser_player2, loser_player2_points - loser_player2_ratio * points_to_add)
+
+    def _calculate_dl_points(self) -> None:
+        self._player_to_dl_points = {player: self.get_player_starting_dl_points(player)
+                               for player in self.get_player_names()}
+        for match in self.get_double_league_matches(order=Order.asc):
+            self._update_dl_points_after_match(match)
