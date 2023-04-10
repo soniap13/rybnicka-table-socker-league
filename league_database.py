@@ -215,12 +215,12 @@ class LeagueDatabase:
             FROM (
                 SELECT player, AVG(score) as avg_score
                 FROM (
-                    SELECT player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) as score
+                    SELECT player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
                     FROM player_recent_lost_matches
                     INNER JOIN players
                     ON player_recent_lost_matches.player = players.name
                     UNION
-                    SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) as score
+                    SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
                     FROM player_recent_won_matches
                     INNER JOIN players
                     ON player_recent_won_matches.player = players.name)
