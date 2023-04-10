@@ -98,7 +98,7 @@ class PlayerDataView(QWidget):
         self._starting_dl_points_box.setText(str(self._database.get_player_starting_dl_points(self._name)))
 
     def _update_recent_dl_matches(self) -> None:
-        matches = self._database.get_player_recent_double_league_matches(self._name, 5)
+        matches = self._database.get_player_double_league_matches(self._name, 5)
         self._recent_dl_matches.setColumnCount(5)
         self._recent_dl_matches.setRowCount(len(matches))
         self._recent_dl_matches.setHorizontalHeaderLabels(

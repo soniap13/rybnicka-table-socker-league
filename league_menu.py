@@ -24,8 +24,8 @@ class LeagueMenu(QWidget):
         self._layout.addWidget(recent_matches)
         return recent_matches
 
-    def _add_statistics_table(self) -> QTableWidget:
-        self._layout.addWidget(create_label("Statistics", SECTION_TITLE_FONT))
+    def _add_player_statistics_table(self) -> QTableWidget:
+        self._layout.addWidget(create_label("Players Statistics", SECTION_TITLE_FONT))
         players_statistics = QTableWidget()
         self._layout.addWidget(players_statistics)
         return players_statistics

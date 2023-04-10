@@ -1,4 +1,5 @@
 from functools import partial
+from itertools import combinations
 from typing import Optional
 
 from PyQt5.QtWidgets import QComboBox, QLineEdit, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem
@@ -16,13 +17,15 @@ class DoubleLeagueMenu(LeagueMenu):
         self._layout = QVBoxLayout()
         self._layout.addWidget(create_label("Double League", TITLE_FONT))
         self._add_return_button(self._window.switch_to_main_menu)
-        self._players_statistics = self._add_statistics_table()
+        self._players_statistics = self._add_player_statistics_table()
+        self._teams_statistics = self._add_teams_statistics_table()
         self._add_new_match_interaction()
         self._recent_matches = self._add_recent_matches_table()
         self.setLayout(self._layout)
 
     def update(self) -> None:
         self._update_player_statistcs()
+        self._update_teams_statistics()
         self._update_recent_matches()
         self._update_name_boxes()
 
@@ -76,6 +79,19 @@ class DoubleLeagueMenu(LeagueMenu):
             self._players_statistics.setItem(index, 1, QTableWidgetItem(
                 str(self._database.get_player_dl_points(player))))
 
+    def _update_teams_statistics(self) -> None:
+        players = self._database.get_player_names()
+        teams = combinations(players, 2)
+        self._teams_statistics.setColumnCount(3)
+        self._teams_statistics.setRowCount(len(players))
+        self._teams_statistics.setHorizontalHeaderLabels(('Player1', 'Player2', 'Points'))
+        teams_dl_points = {team: self._database.get_team_dl_points(*team) for team in teams}
+        for index, ((player1, player2), dl_points) in enumerate(
+                sorted(teams_dl_points.items(), key=lambda record: record[1])):
+            self._teams_statistics.setItem(index, 0, QTableWidgetItem(player1))
+            self._teams_statistics.setItem(index, 1, QTableWidgetItem(player2))
+            self._teams_statistics.setItem(index, 2, QTableWidgetItem(str(dl_points)))
+
     def _update_recent_matches(self) -> None:
         matches = self._database.get_double_league_matches(10)
         self._recent_matches.setColumnCount(6)
@@ -95,3 +111,9 @@ class DoubleLeagueMenu(LeagueMenu):
     def _delete_match(self, match_id: int) -> None:
         self._database.delete_dl_match(match_id)
         self.update()
+
+    def _add_teams_statistics_table(self) -> QTableWidget:
+        self._layout.addWidget(create_label("Teams Statistics", SECTION_TITLE_FONT))
+        teams_statistics = QTableWidget()
+        self._layout.addWidget(teams_statistics)
+        return teams_statistics
