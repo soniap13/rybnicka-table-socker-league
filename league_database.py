@@ -24,39 +24,14 @@ class Order(Enum):
 
 
 class LeagueDatabase:
-    def __init__(self):
-        self._conn = sqlite3.connect('database.db')
+    def __init__(self, db_name: str):
+        self._conn = sqlite3.connect(db_name)
         self._cursor = self._conn.cursor()
-        #self.initialize_db()
         self._calculate_dl_points()
         #self._load_dl_matches_from_file('dl_matches.txt')
 
     def close_connection(self) -> None:
         self._conn.close()
-    
-    def initialize_db(self) -> None:
-        self._cursor.execute(
-            """CREATE TABLE players (
-            name TEXT PRIMARY KEY,
-            starting_dl_points REAL,
-            try_hard_factor REAL
-            )""")
-        self._cursor.execute(
-            """CREATE TABLE single_league_matches (
-            sl_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            winning_player TEXT,
-            loser_player TEXT,
-            goal_balance INTEGER
-            )""")
-        self._cursor.execute(
-            """CREATE TABLE double_league_matches (
-            dl_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            winning_player1 TEXT,
-            winning_player2 TEXT,
-            loser_player1 TEXT,
-            loser_player2 TEXT,
-            goal_balance INTEGER
-            )""")
 
     def is_player_in_database(self, player: str) -> bool:
         self._cursor.execute("SELECT * FROM players WHERE name = :player",
@@ -180,6 +155,10 @@ class LeagueDatabase:
         return round(float(self._cursor.fetchone()[0]), 2)
 
     def get_player_sl_points(self, name: str) -> float:
+        print(name)
+        self._cursor.execute("DROP TABLE IF EXISTS player_recent_won_matches")
+        self._cursor.execute("DROP TABLE IF EXISTS player_recent_lost_matches")
+        self._cursor.execute("DROP TABLE IF EXISTS player_recent_matches")
         self._cursor.execute(
             """
             CREATE TABLE player_recent_matches AS
@@ -211,6 +190,41 @@ class LeagueDatabase:
         )
         self._cursor.execute(
             """
+            SELECT player, avg_score
+            FROM (
+                SELECT player, AVG(score) as avg_score
+                FROM (
+                    SELECT player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
+                    FROM player_recent_lost_matches
+                    INNER JOIN players
+                    ON player_recent_lost_matches.player = players.name
+                    UNION ALL
+                    SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
+                    FROM player_recent_won_matches
+                    INNER JOIN players
+                    ON player_recent_won_matches.player = players.name)
+                GROUP BY player)
+            """,
+            {"player_try_hard_factor": self.get_player_try_hard_factor(name), "name": name})
+        print(self._cursor.fetchall())
+        self._cursor.execute(
+            """
+            SELECT player, score
+            FROM (
+                SELECT player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
+                FROM player_recent_lost_matches
+                INNER JOIN players
+                ON player_recent_lost_matches.player = players.name
+                UNION ALL
+                SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
+                FROM player_recent_won_matches
+                INNER JOIN players
+                ON player_recent_won_matches.player = players.name)
+            """,
+            {"player_try_hard_factor": self.get_player_try_hard_factor(name), "name": name})
+        print(self._cursor.fetchall())
+        self._cursor.execute(
+            """
             SELECT AVG(avg_score)
             FROM (
                 SELECT player, AVG(score) as avg_score
@@ -219,7 +233,7 @@ class LeagueDatabase:
                     FROM player_recent_lost_matches
                     INNER JOIN players
                     ON player_recent_lost_matches.player = players.name
-                    UNION
+                    UNION ALL
                     SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
                     FROM player_recent_won_matches
                     INNER JOIN players
@@ -227,7 +241,9 @@ class LeagueDatabase:
                 GROUP BY player)
             """,
             {"player_try_hard_factor": self.get_player_try_hard_factor(name), "name": name})
-        player_score = self._cursor.fetchone()[0]
+        all = self._cursor.fetchall()
+        print(all)
+        player_score = all[0][0]
         self._cursor.execute("DROP TABLE IF EXISTS player_recent_won_matches")
         self._cursor.execute("DROP TABLE IF EXISTS player_recent_lost_matches")
         self._cursor.execute("DROP TABLE IF EXISTS player_recent_matches")
@@ -274,25 +290,19 @@ class LeagueDatabase:
             """,
             {"player1": player1, "player2": player2}
         )
-        team_try_hard_factor = self.get_player_try_hard_factor(player1) + self.get_player_try_hard_factor(player2)
         self._cursor.execute(
             """
             SELECT AVG(avg_score)
             FROM (
                 SELECT player1, player2, AVG(score) as avg_score
                 FROM (
-                    SELECT player1, player2, - goal_balance / 10.0 + (try_hard_factor - :team_try_hard_factor) as score
+                    SELECT player1, player2, - goal_balance / 10.0 - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
                     FROM team_recent_lost_matches
-                    INNER JOIN players
-                    ON team_recent_lost_matches.player1 = players.name
                     UNION
-                    SELECT player1, player2, goal_balance / 10.0 + 1 - (:team_try_hard_factor - try_hard_factor) as score
-                    FROM team_recent_won_matches
-                    INNER JOIN players
-                    ON team_recent_won_matches.player1 = players.name)
+                    SELECT player1, player2, goal_balance / 10.0 + 1 + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
+                    FROM team_recent_won_matches)
                 GROUP BY player1, player2)
-            """,
-            {"team_try_hard_factor": team_try_hard_factor})
+            """)
         team_score = self._cursor.fetchone()[0]
         self._cursor.execute("DROP TABLE IF EXISTS team_recent_won_matches")
         self._cursor.execute("DROP TABLE IF EXISTS team_recent_lost_matches")
@@ -342,13 +352,3 @@ class LeagueDatabase:
                                      for player in self.get_player_names()}
         for match in self.get_double_league_matches(order=Order.asc):
             self._update_dl_points_after_match(match)
-
-    def _load_dl_matches_from_file(self, file_name: str) -> None:
-        with open(file_name, 'r') as file:
-            lines = file.readlines()
-        for line in lines:
-            record = line.split(" ")
-            if len(record) != 5:
-                print(f"line '{record}' is incorrect")
-                continue
-            self.insert_double_league_match(DoubleLeagueMatch(None, *record[:4], int(record[-1])))

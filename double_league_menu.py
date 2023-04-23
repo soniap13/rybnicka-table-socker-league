@@ -73,11 +73,12 @@ class DoubleLeagueMenu(LeagueMenu):
         self._players_statistics.setColumnCount(2)
         self._players_statistics.setRowCount(len(players))
         self._players_statistics.setHorizontalHeaderLabels(('Name', 'Points'))
-        for index, player in enumerate(
-                sorted(players, key=lambda player: self._database.get_player_dl_points(player), reverse=True)):
+        teams_dl_points = {player: self._database.get_player_dl_points(player) for player in players}
+        for index, (player, dl_points) in enumerate(
+                sorted(teams_dl_points.items(), key=lambda record: record[1], reverse=True)):
             self._players_statistics.setItem(index, 0, QTableWidgetItem(player))
             self._players_statistics.setItem(index, 1, QTableWidgetItem(
-                str(self._database.get_player_dl_points(player))))
+                str(dl_points)))
 
     def _update_teams_statistics(self) -> None:
         players = self._database.get_player_names()
@@ -87,7 +88,7 @@ class DoubleLeagueMenu(LeagueMenu):
         self._teams_statistics.setHorizontalHeaderLabels(('Player1', 'Player2', 'Points'))
         teams_dl_points = {team: self._database.get_team_dl_points(*team) for team in teams}
         for index, ((player1, player2), dl_points) in enumerate(
-                sorted(teams_dl_points.items(), key=lambda record: record[1])):
+                sorted(teams_dl_points.items(), key=lambda record: record[1], reverse=True)):
             self._teams_statistics.setItem(index, 0, QTableWidgetItem(player1))
             self._teams_statistics.setItem(index, 1, QTableWidgetItem(player2))
             self._teams_statistics.setItem(index, 2, QTableWidgetItem(str(dl_points)))

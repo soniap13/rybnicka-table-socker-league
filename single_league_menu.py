@@ -57,7 +57,7 @@ class SingleLeagueMenu(LeagueMenu):
     def _update_name_boxes(self) -> None:
         player_names = [''] + self._database.get_player_names()
         for name_box in (self._name1_box, self._name2_box):
-            #name_box.clear()
+            name_box.clear()
             name_box.addItems(player_names)
 
     def _add_new_match_to_database(self, match: Optional[SingleLeagueMatch]) -> None:
