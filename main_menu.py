@@ -100,6 +100,7 @@ class MainMenu(QWidget):
     def _add_new_player_to_database(self, player: Optional[PlayerStartingData]) -> None:
         if player is not None:
             if player.name in self._database.get_player_names():
-                self._error_window(f"Player {player.name} already exists in database")
+                self._error_window = ErrorWindow(f"Player {player.name} already exists in database")
+                return
             self._database.insert_player(player)
             self._update_player_statistics()

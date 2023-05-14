@@ -44,13 +44,15 @@ class PlayerDataView(QWidget):
         update_try_hard_factor_button = QPushButton("Update Try Hard Factor")
         update_try_hard_factor_button.clicked.connect(self._update_player_try_hard_factor)
         self._sl_points_label = create_label("", NORMAL_TEXT_FONT)
-        dl_points_label = create_label("DL points:", NORMAL_TEXT_FONT)
-        self._dl_points_box = QLineEdit()
-        update_dl_points_button = QPushButton("Update DL Points")
-        update_dl_points_button.clicked.connect(self._update_player_dl_points)
+        self._dl_points_label = create_label("", NORMAL_TEXT_FONT)
+        starting_dl_points_label = create_label("Starting DL points:", NORMAL_TEXT_FONT)
+        self._starting_dl_points_box = QLineEdit()
+        update_dl_points_button = QPushButton("Update starting DL Points")
+        update_dl_points_button.clicked.connect(self._update_player_starting_dl_points)
         for label in (name_label, self._name_text_box, update_name_button, try_hard_factor_label,
                       self._try_hard_factor_box, update_try_hard_factor_button, self._sl_points_label,
-                      dl_points_label, self._dl_points_box, update_dl_points_button):
+                      self._dl_points_label, starting_dl_points_label, self._starting_dl_points_box,
+                      update_dl_points_button):
             self._layout.addWidget(label)
 
     def _update_name_of_player(self) -> None:
@@ -68,11 +70,12 @@ class PlayerDataView(QWidget):
         self._database.update_player_try_hard_factor(self._name, float(self._try_hard_factor_box.text()))
         self.update()
 
-    def _update_player_dl_points(self) -> None:
-        if not is_float(self._dl_points_box.text()):
+    def _update_player_starting_dl_points(self) -> None:
+        if not is_float(self._starting_dl_points_box.text()):
             self._error_window = ErrorWindow("DL points have to be float number")
             return None
-        self._database.update_player_dl_points(self._name, float(self._dl_points_box.text()))
+        self._database.update_player_starting_dl_points(
+            self._name, float(self._starting_dl_points_box.text()))
         self.update()
 
     def _add_recent_sl_matches_table(self) -> QTableWidget:
@@ -91,7 +94,8 @@ class PlayerDataView(QWidget):
         self._name_text_box.setText(self._name)
         self._try_hard_factor_box.setText(str(self._database.get_player_try_hard_factor(self._name)))
         self._sl_points_label.setText(f"SL points: {self._database.get_player_sl_points(self._name)}")
-        self._dl_points_box.setText(str(self._database.get_player_dl_points(self._name)))
+        self._dl_points_label.setText(f"DL points: {self._database.get_player_dl_points(self._name)}")
+        self._starting_dl_points_box.setText(str(self._database.get_player_starting_dl_points(self._name)))
 
     def _update_recent_dl_matches(self) -> None:
         matches = self._database.get_player_double_league_matches(self._name, 5)

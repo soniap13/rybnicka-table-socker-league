@@ -16,7 +16,7 @@ class SingleLeagueMenu(LeagueMenu):
         self._layout = QVBoxLayout()
         self._layout.addWidget(create_label("Single League", TITLE_FONT))
         self._add_return_button(self._window.switch_to_main_menu)
-        self._players_statistics = self._add_statistics_table()
+        self._players_statistics = self._add_player_statistics_table()
         self._add_new_match_interaction()
         self._recent_matches = self._add_recent_matches_table()
         self.setLayout(self._layout)

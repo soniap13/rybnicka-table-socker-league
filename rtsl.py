@@ -7,7 +7,7 @@ from application_window import ApplicationWindow
 if __name__ == '__main__':
     app = QApplication([])
     app.setStyle('Fusion')
-    database = LeagueDatabase()
+    database = LeagueDatabase('database.db')
     window = ApplicationWindow(database)
     app.exec()
     database.close_connection()

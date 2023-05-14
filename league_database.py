@@ -1,41 +1,37 @@
+from enum import Enum
 import sqlite3
 from typing import List, Optional
 
 from match import DoubleLeagueMatch, SingleLeagueMatch
 
 
+def calculate_moved_points(diff: float, bilans: int) -> float:
+    return pow((diff / 2720 + 1.7), 7.25) * (bilans / 10 + 0.5)
+
+
+def calculate_ratio(player1_points: float, player2_points: float) -> float:
+    return player1_points / (player1_points + player2_points)
+
+
+def calculate_diff(winning_player1_points: float, winning_player2_points: float,
+                   loser_player1_points: float, loser_player2_points: float) -> float:
+    return loser_player1_points + loser_player2_points - winning_player1_points - winning_player2_points
+
+
+class Order(Enum):
+    asc = 'ASC'
+    desc = 'DESC'
+
+
 class LeagueDatabase:
-    def __init__(self):
-        self._conn = sqlite3.connect('database.db')
+    def __init__(self, db_name: str):
+        self._conn = sqlite3.connect(db_name)
         self._cursor = self._conn.cursor()
-        #self.initialize_db()
+        self._calculate_dl_points()
+        #self._load_dl_matches_from_file('dl_matches.txt')
 
     def close_connection(self) -> None:
         self._conn.close()
-    
-    def initialize_db(self) -> None:
-        self._cursor.execute(
-            """CREATE TABLE players (
-            name TEXT PRIMARY KEY,
-            dl_points REAL,
-            try_hard_factor REAL
-            )""")
-        self._cursor.execute(
-            """CREATE TABLE single_league_matches (
-            sl_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            winning_player TEXT,
-            loser_player TEXT,
-            goal_balance INTEGER
-            )""")
-        self._cursor.execute(
-            """CREATE TABLE double_league_matches (
-            dl_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            winning_player1 TEXT,
-            winning_player2 TEXT,
-            loser_player1 TEXT,
-            loser_player2 TEXT,
-            goal_balance INTEGER
-            )""")
 
     def is_player_in_database(self, player: str) -> bool:
         self._cursor.execute("SELECT * FROM players WHERE name = :player",
@@ -45,8 +41,9 @@ class LeagueDatabase:
     def insert_player(self, player: str) -> None:
         with self._conn:
              self._cursor.execute(
-                 "INSERT INTO players VALUES (:name, :dl_points, :try_hard_factor)",
-                 {'name': player.name, 'dl_points': player.dl_points, 'try_hard_factor': player.try_hard_factor})
+                 "INSERT INTO players VALUES (:name, :starting_dl_points, :try_hard_factor)",
+                 {'name': player.name, 'starting_dl_points': player.dl_points, 'try_hard_factor': player.try_hard_factor})
+        self._player_to_dl_points[player.name] = player.dl_points
 
     def update_player_name(self, old_name: str, new_name: str) -> None:
         with self._conn:
@@ -78,6 +75,8 @@ class LeagueDatabase:
                 "UPDATE double_league_matches SET loser_player2 = :new_name WHERE loser_player2 = :old_name",
                 {"old_name": old_name, "new_name": new_name}
             )
+        self._player_to_dl_points[new_name] = self._player_to_dl_points[old_name]
+        del self._player_to_dl_points[old_name]
 
     def update_player_try_hard_factor(self, player: str, new_try_hard_factor: float) -> None:
         with self._conn:
@@ -102,7 +101,7 @@ class LeagueDatabase:
         return [SingleLeagueMatch(*record) for record in records]
 
     def get_player_single_league_matches(self, player: str,
-                                  num: Optional[int] = None) -> List[SingleLeagueMatch]:
+                                         num: Optional[int] = None) -> List[SingleLeagueMatch]:
         self._cursor.execute(
             """
             SELECT * FROM single_league_matches
@@ -121,9 +120,13 @@ class LeagueDatabase:
                 {'winning_player1': match.winning_player1, 'winning_player2': match.winning_player2,
                  'loser_player1': match.loser_player1, 'loser_player2': match.loser_player2,
                  'goal_balance': match.goal_balance})
+        self._update_dl_points_after_match(match)
 
-    def get_double_league_matches(self, num: Optional[int] = None) -> List[DoubleLeagueMatch]:
-        self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
+    def get_double_league_matches(self, num: Optional[int] = None, order: Order = Order.desc) -> List[DoubleLeagueMatch]:
+        if order == Order.desc:
+            self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id DESC")
+        else:
+            self._cursor.execute("SELECT * FROM double_league_matches ORDER BY dl_id ASC")
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [DoubleLeagueMatch(*record) for record in records]
 
@@ -140,69 +143,173 @@ class LeagueDatabase:
         records = self._cursor.fetchall() if num is None else self._cursor.fetchmany(num)
         return [DoubleLeagueMatch(*record) for record in records]
 
-    def update_player_dl_points(self, name, new_points: float) -> None:
+    def update_player_starting_dl_points(self, name, new_points: float) -> None:
         with self._conn:
-            self._cursor.execute("UPDATE players SET dl_points = :dl_points WHERE name = :name",
-                                 {'dl_points': new_points, 'name': name})
+            self._cursor.execute("UPDATE players SET starting_dl_points = :starting_dl_points WHERE name = :name",
+                                 {'starting_dl_points': new_points, 'name': name})
+        self._calculate_dl_points()
 
-    def get_player_dl_points(self, name: str) -> float:
-        self._cursor.execute("SELECT dl_points FROM players WHERE name = :name",
+    def get_player_starting_dl_points(self, name: str) -> float:
+        self._cursor.execute("SELECT starting_dl_points FROM players WHERE name = :name",
                              {'name': name})
         return round(float(self._cursor.fetchone()[0]), 2)
 
     def get_player_sl_points(self, name: str) -> float:
+        self._cursor.execute("DROP TABLE IF EXISTS player_won_matches")
+        self._cursor.execute("DROP TABLE IF EXISTS player_lost_matches")
+        self._cursor.execute("DROP TABLE IF EXISTS player_matches")
+        self._cursor.execute("DROP TABLE IF EXISTS player_scores")
+        self._cursor.execute("DROP TABLE IF EXISTS player_recent_scores")
         self._cursor.execute(
             """
-            CREATE TABLE player_recent_matches AS
+            CREATE TABLE player_matches AS
             SELECT *
             FROM single_league_matches
             WHERE loser_player = :name OR winning_player = :name
-            ORDER BY sl_id DESC
-            LIMIT 10
             """,
             {"name": name}
         )
         self._cursor.execute(
             """
-            CREATE TABLE player_recent_lost_matches AS
-            SELECT winning_player as player, goal_balance
-            FROM player_recent_matches
+            CREATE TABLE player_lost_matches AS
+            SELECT sl_id, winning_player as player, goal_balance
+            FROM player_matches
             WHERE loser_player = :name
             """,
             {"name": name}
         )
         self._cursor.execute(
             """
-            CREATE TABLE player_recent_won_matches AS
-            SELECT loser_player as player, goal_balance
-            FROM player_recent_matches
+            CREATE TABLE player_won_matches AS
+            SELECT sl_id, loser_player as player, goal_balance
+            FROM player_matches
             WHERE winning_player = :name
             """,
             {"name": name}
         )
         self._cursor.execute(
             """
+            CREATE TABLE player_scores AS
+            SELECT player, score
+            FROM (
+                SELECT sl_id, player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
+                FROM player_lost_matches
+                INNER JOIN players
+                ON player_lost_matches.player = players.name
+                UNION ALL
+                SELECT sl_id, player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
+                FROM player_won_matches
+                INNER JOIN players
+                ON player_won_matches.player = players.name)
+            ORDER BY sl_id DESC
+            """,
+            {"player_try_hard_factor": self.get_player_try_hard_factor(name), "name": name})
+        self._cursor.execute(
+            """
+            CREATE TABLE player_recent_scores AS
+            WITH CT AS
+            (
+                SELECT *,
+                    row_number() OVER (PARTITION BY player) rn
+                FROM   player_scores 
+            )
+            SELECT CT.player, score
+            FROM   CT
+            JOIN   (SELECT DISTINCT player FROM player_scores) cp
+            ON     CT.player = cp.player
+            WHERE  rn <=10
+            """
+        )
+        self._cursor.execute(
+            """
             SELECT AVG(avg_score)
             FROM (
                 SELECT player, AVG(score) as avg_score
-                FROM (
-                    SELECT player, - goal_balance / 10.0 + (try_hard_factor - :player_try_hard_factor) as score
-                    FROM player_recent_lost_matches
-                    INNER JOIN players
-                    ON player_recent_lost_matches.player = players.name
-                    UNION
-                    SELECT player, goal_balance / 10.0 + 1 - (:player_try_hard_factor - try_hard_factor) as score
-                    FROM player_recent_won_matches
-                    INNER JOIN players
-                    ON player_recent_won_matches.player = players.name)
+                FROM player_recent_scores
                 GROUP BY player)
-            """,
-            {"player_try_hard_factor": self.get_player_try_hard_factor(name), "name": name})
+            """)
         player_score = self._cursor.fetchone()[0]
-        self._cursor.execute("DROP TABLE IF EXISTS player_recent_won_matches")
-        self._cursor.execute("DROP TABLE IF EXISTS player_recent_lost_matches")
-        self._cursor.execute("DROP TABLE IF EXISTS player_recent_matches")
         return 0 if player_score is None else round(player_score * 100, 2)
+    
+    def get_team_dl_points(self, player1: str, player2: str) -> float:
+        self._cursor.execute("DROP TABLE IF EXISTS team_matches")
+        self._cursor.execute(
+            """
+            CREATE TABLE team_matches AS
+            SELECT *
+            FROM double_league_matches
+            WHERE
+                (loser_player1 = :player1 AND loser_player2 = :player2)
+                OR (loser_player1 = :player2 AND loser_player2 = :player1)
+                OR (winning_player1 = :player1 AND winning_player2 = :player2)
+                OR (winning_player1 = :player2 AND winning_player2 = :player1)
+            """,
+            {"player1": player1, "player2": player2}
+        )
+        self._cursor.execute("DROP TABLE IF EXISTS team_lost_matches")
+        self._cursor.execute(
+            """
+            CREATE TABLE team_lost_matches AS
+            SELECT dl_id, winning_player1 as player1, winning_player2 as player2, goal_balance
+            FROM team_matches
+            WHERE
+                (loser_player1 = :player1 AND loser_player2 = :player2)
+                OR (loser_player1 = :player2 AND loser_player2 = :player1)
+            """,
+            {"player1": player1, "player2": player2}
+        )
+        self._cursor.execute("DROP TABLE IF EXISTS team_won_matches")
+        self._cursor.execute(
+            """
+            CREATE TABLE team_won_matches AS
+            SELECT dl_id, loser_player1 as player1, loser_player2 as player2, goal_balance
+            FROM team_matches
+            WHERE
+                (winning_player1 = :player1 AND winning_player2 = :player2)
+                OR (winning_player1 = :player2 AND winning_player2 = :player1)
+            """,
+            {"player1": player1, "player2": player2}
+        )
+        self._cursor.execute("DROP TABLE IF EXISTS team_scores")
+        self._cursor.execute(
+            """
+            CREATE TABLE team_scores AS
+            SELECT player1, player2, score
+            FROM (
+                SELECT dl_id, player1, player2, - goal_balance / 10.0 - (goal_balance / (goal_balance - 0.000001)) * 0.5 + 0.5 as score
+                FROM team_lost_matches
+                UNION
+                SELECT dl_id, player1, player2, goal_balance / 10.0 + 1 + (goal_balance / (goal_balance - 0.000001)) * 0.5 - 0.5 as score
+                FROM team_won_matches)
+            ORDER BY dl_id DESC
+            """)
+        self._cursor.execute("DROP TABLE IF EXISTS team_recent_scores")
+        self._cursor.execute(
+            """
+            CREATE TABLE team_recent_scores AS
+            WITH CT AS
+            (
+                SELECT *,
+                    row_number() OVER (PARTITION BY player1, player2) rn
+                FROM   team_scores 
+            )
+            SELECT CT.player1, CT.player2, score
+            FROM   CT
+            JOIN   (SELECT DISTINCT player1, player2 FROM team_scores) cp
+            ON     CT.player1 = cp.player1 AND CT.player2 = cp.player2
+            WHERE  rn <=10
+            """
+        )
+        self._cursor.execute(
+            """
+            SELECT AVG(avg_score)
+            FROM (
+                SELECT player1, player2, AVG(score) as avg_score
+                FROM team_recent_scores
+                GROUP BY player1, player2)
+            """)
+        team_score = self._cursor.fetchone()[0]
+        return 0 if team_score is None else round(team_score * 100, 2)
 
     def get_player_try_hard_factor(self, name: str) -> int:
         self._cursor.execute(
@@ -213,8 +320,37 @@ class LeagueDatabase:
         with self._conn:
             self._cursor.execute("DELETE FROM double_league_matches WHERE dl_id = :dl_id",
                                  {"dl_id": match_id})
+        self._calculate_dl_points()
 
     def delete_sl_match(self, match_id: int) -> None:
         with self._conn:
             self._cursor.execute("DELETE FROM single_league_matches WHERE sl_id = :sl_id",
                                  {"sl_id": match_id})
+
+    def get_player_dl_points(self, player: str) -> float:
+        return round(self._player_to_dl_points[player], 2)
+            
+    def _update_player_dl_points(self, name: str, new_points: float) -> None:
+        self._player_to_dl_points[name] = new_points
+
+    def _update_dl_points_after_match(self, match: DoubleLeagueMatch) -> None:
+        winning_player1_points = self.get_player_dl_points(match.winning_player1)
+        winning_player2_points = self.get_player_dl_points(match.winning_player2)
+        loser_player1_points = self.get_player_dl_points(match.loser_player1)
+        loser_player2_points = self.get_player_dl_points(match.loser_player2)
+        winning_player2_ratio = calculate_ratio(winning_player1_points, winning_player2_points)
+        winning_player1_ratio = 1 - winning_player2_ratio
+        loser_player1_ratio = calculate_ratio(loser_player1_points, loser_player2_points)
+        loser_player2_ratio = 1 - loser_player1_ratio
+        diff = calculate_diff(winning_player1_points, winning_player2_points, loser_player1_points, loser_player2_points)
+        points_to_add = calculate_moved_points(diff, match.goal_balance)
+        self._update_player_dl_points(match.winning_player1, winning_player1_points + winning_player1_ratio * points_to_add)
+        self._update_player_dl_points(match.winning_player2, winning_player2_points + winning_player2_ratio * points_to_add)
+        self._update_player_dl_points(match.loser_player1, loser_player1_points - loser_player1_ratio * points_to_add)
+        self._update_player_dl_points(match.loser_player2, loser_player2_points - loser_player2_ratio * points_to_add)
+
+    def _calculate_dl_points(self) -> None:
+        self._player_to_dl_points = {player: self.get_player_starting_dl_points(player)
+                                     for player in self.get_player_names()}
+        for match in self.get_double_league_matches(order=Order.asc):
+            self._update_dl_points_after_match(match)
